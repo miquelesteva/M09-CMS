@@ -1,0 +1,577 @@
+<h1 id="ldap">LDAP</h1>
+<p>~<sub>~</sub> ## Conceptes generals de LDAP</p>
+<p>Conceptes clau de configuració:</p>
+<ul>
+<li>El fitxer <strong>slapd.conf</strong> conté la configuració per generar la base de dades, però és un sistema deprecated.</li>
+<li>El directori <strong>/etc/openldap/slapd.d</strong> és on es desa la configuració en format d'estructura de directoris ldif. Es transforma en slaptest del fitxer de configuració al directori.</li>
+<li>El directori <strong>/var/lib/ldap</strong> és on es desa per defecte la informació, les dades de la base de dades. Si hi ha vàries bases de dades cal un directori diferent per a cada una.</li>
+<li>Es pot consultar (slapcat) i inserir dades massivament en offline (slapadd) amb el servei apagat.</li>
+<li>Per usar ordres LDAP client cal que el servei estigui engegat, i cal connectar al servidor <strong>localhost</strong> (a l'aula per defecte les ordres client consulten al servidor d'informàtica).</li>
+</ul>
+<p>Conceptes claus de funcionament:</p>
+<ul>
+<li>Cal assdegurar-se que els permisos del directori /etc/openldap/slapd.d (i subarbre) i els de /var/lib/ldap (i subarbre) siguin propietat de l'usuari i grup ldap, és a dir <strong>ldap.ldap</strong>.</li>
+<li>Les dades es poden assignar a la base de dades amb ordres de servidor (slapadd) i amb ordres de client (ldapadd), que tenen característiques diferents.</li>
+<li>Sempre que es modifiqui la configuració del directori /etc/openldap/slapd.d o de les dades de /var/lib/ldap usant l'ordre slapadd cal tornar a assignar la propietat d'usuari i grup a ldap.ldap.</li>
+<li>La càrrega de dades intensiva (inicial per exemple) es fa accedint directament al backend (amb el servei offline) usant l'ordre slapadd.</li>
+<li>Amb el servei engegat es poden afegir dades a la base de dades amb l'ordre ldap client <strong>ldapadd</strong>. La comunicació és del client al servidor usant el protocol <strong>LDAP</strong>.</li>
+<li>Assegurar-se que les ordres client consulten al servidor LDAP apropiat, si no s'indica a les aules d'informàtica es consults al servidor d'informàtica (gandhi). Es recomana usar l'opció &quot;<strong>-h localhost:389</strong>&quot; per forçar l'ordre a consultar el propi servidor. <strong><em> </em></strong> ## Manual Creació bdd i inserció de dades.</li>
+</ul>
+<p>1.<strong>Creació container docker amb tot el necessari:</strong></p>
+<pre><code>[root@i14 ~]# docker run --name slapd01 -h slapd01 -it fedora:24 /bin/bash
+
+Instal·lem els paquets que necessitarem durant tota la práctica: 
+
+[root@slapd01 /]# dnf -y install vim procps iputils iproute xinetd openldap openldap-servers openldap-clients less mlocate nmap tree
+
+[root@slapd01 /]# mkdir /opt/docker</code></pre>
+<p>Al nostre pc:</p>
+<pre><code>[isx41536245@i14 ~]$ cd /home/groups/inf/hisx2/M06-ASO/01-ldap_basic/
+[isx41536245@i14 01-ldap_basic]$ ll
+total 28
+-rw-r--r-- 1 ecanet hisx2  845 Oct 19  2016 DB_CONFIG
+-rw-r--r-- 1 ecanet hisx2 5924 Dec 12 11:14 organitzacio-altres_edt.org.ldif
+-rw-r--r-- 1 ecanet hisx2  492 Sep 23  2014 organitzacio_edt.org.ldif
+-rw-r--r-- 1 ecanet hisx2 1361 Sep 20  2016 slapd-edt.org.conf
+-rw-r--r-- 1 ecanet hisx2 2359 Sep 23  2014 usuaris_edt.org.ldif
+-rw-r--r-- 1 ecanet hisx2 3704 Oct  2  2015 usuaris-mes_edt.org.ldif</code></pre>
+<p><strong>Copiem aquests arxius al docker: </strong></p>
+<pre><code>[root@i14 01-ldap_basic]# mkdir /var/tmp/docker
+[root@i14 01-ldap_basic]# cp * /var/tmp/docker
+
+
+[root@i14 01-ldap_basic]# docker cp . slapd01:/opt/docker
+lstat /home/groups/inf/hisx2/M06-ASO: permission denied
+[root@i14 01-ldap_basic]# cd /var/tmp/docker/
+
+[root@i14 docker]# docker cp . slapd01:/opt/docker</code></pre>
+<p>2.<strong>Verificació de carpetes i arxius:</strong></p>
+<p><strong>Esborrem les bases de dades existens al ldap (les que venen per defecte):</strong></p>
+<pre><code>[root@slapd01 /]# rm -rf /etc/openldap/slapd.d/*</code></pre>
+<p><strong>Copiem la configuració i estructura de la bbdd que crearem al directori corresponent:</strong></p>
+<pre><code>[root@slapd01 /]# cp /opt/docker/DB_CONFIG /var/lib/ldap/.</code></pre>
+<p><em>Nota: recordar que cal tenir en compte que si anessim a crear més d'una bbdd cada una hauria d'anar a directoris diferents</em>.</p>
+<p>El fitxer slapd-edt.org.conf conté les dades que ens disposem a carregar. Cal tenir present les línies següents:</p>
+<pre><code>database bdbz
+suffix &quot;dc=edt,dc=org&quot; --&gt; nom de la base de dades. 
+rootdn &quot;cn=Manager,dc=edt,dc=org&quot; --&gt; Manager serà usuari administrador. 
+rootpw secret --&gt; Password que definim a Manager. 
+directory /var/lib/lda --&gt; directori on estarà la base de dades. </code></pre>
+<p><strong>SLAPTEST</strong></p>
+<p>Eina de verificació de que el fitxer de configuració és correcte.</p>
+<pre><code>[root@slapd01 /]# slaptest -v -u -f /opt/docker/slapd-edt.org.conf 
+
+[root@slapd01 /]# slaptest -v -u -F /etc/openldap/slapd.d/
+slaptest: bad configuration directory!
+
+[root@slapd01 /]# slaptest -v -f /opt/docker/slapd-edt.org.conf -F /etc/openldap/slapd.d/
+5a2fb360 bdb_db_open: database &quot;dc=edt,dc=org&quot;: db_open(/var/lib/ldap/id2entry.bdb) failed: No such file or directory (2).
+5a2fb360 backend_startup_one (type=bdb, suffix=&quot;dc=edt,dc=org&quot;): bi_db_open failed! (2)
+slap_startup failed (test would succeed using the -u switch)</code></pre>
+<hr />
+<p>Opcions de slaptest:</p>
+<ul>
+<li>-v : verbose --&gt; per veure els missatges.</li>
+<li>-u: engega el mode &quot;dry-run&quot;. És a dir: no fallis si la base de dades no es pot obrir però la configuració és bona.</li>
+<li>-f: especifica un fitxer alternatiu al slapd.conf</li>
+<li>-F: especifica un directori de configuració. Si s'especifiquen amb -f i -F, el fitxer de configuració es llegirà i es convertirà al format del directori de configuració i s'escriurà al directori especificat. Si no s'especifica cap opció, slaptest intentarà llegir el directori de configuració predeterminat abans d'intentar utilitzar el fitxer de configuració predeterminat. Si existeix un directori de configuració vàlid, s'omet el fitxer de configuració predeterminat. Si el mode d'ús sec també s'especifica, no es produirà cap conversió. ***</li>
+</ul>
+<p>3.<strong>Càrrega de dades:</strong></p>
+<pre><code>[root@slapd01 /]# slapadd -v -F /etc/openldap/slapd.d -l /opt/docker/organitzacio_edt.org.ldif 
+added: &quot;dc=edt,dc=org&quot; (00000001)
+added: &quot;ou=maquines,dc=edt,dc=org&quot; (00000002)
+added: &quot;ou=clients,dc=edt,dc=org&quot; (00000003)
+added: &quot;ou=productes,dc=edt,dc=org&quot; (00000004)
+_#################### 100.00% eta   none elapsed            none fast!
+Closing DB...</code></pre>
+<p>Ens ha carregat correctament les dades.</p>
+<p>4.<strong>Canvi de permisos:</strong></p>
+<p>Recordem que s'han de canviar els permisos:</p>
+<pre><code>[root@slapd01 /]# chown -R ldap.ldap /var/lib/ldap/
+[root@slapd01 /]# chown -R ldap.ldap /etc/openldap/slapd.d/</code></pre>
+<p>5.<strong>Engegar el servei:</strong></p>
+<p>Al docker no podem fer un systemctl start slapd.service. Llavors l'opció que tenim és:</p>
+<pre><code>[root@slapd01 /]# updatedb
+[root@slapd01 /]# locate slapd.service
+/usr/lib/systemd/system/slapd.service
+[root@slapd01 /]# vim /usr/lib/systemd/system/slapd.service</code></pre>
+<p>Amb la línia de la variable ExecStart=/usr/sbin/slapd -u ldap -h &quot;ldap:/// ldaps:/// ldapi:///&quot; és com engegarem el servei.</p>
+<pre><code>[root@slapd01 /]# /usr/sbin/slapd -u ldap -h &quot;ldap:/// ldaps:/// ldapi:///&quot;
+[root@slapd01 /]# ps ax
+  PID TTY      STAT   TIME COMMAND
+    1 ?        Ss     0:00 /bin/bash
+  370 ?        Ssl    0:00 /usr/sbin/slapd -u ldap -h ldap:/// ldaps:/// ldapi:///
+  372 ?        R+     0:00 ps ax</code></pre>
+<h2 id="consultar-la-base-de-dades-client.">Consultar la base de dades (client).</h2>
+<p><strong>LDAPSEARCH</strong></p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39;
+dn: dc=edt,dc=org
+dc: edt
+description: Escola del treball de Barcelona
+objectClass: dcObject
+objectClass: organization
+o: edt.org
+
+dn: ou=maquines,dc=edt,dc=org
+ou: maquines
+description: Container per a maquines linux
+objectClass: organizationalunit</code></pre>
+<hr />
+<p>Opcions de ldapsearch:</p>
+<ul>
+<li>-x: autenticació simple en comptes de SASL.</li>
+<li>-h: ldaphost. Especifica un host alternatiu en el que s'estigui executant ldap server.</li>
+<li>-LLL: serveix per restringir la sortida a ldif v1 (-L), la segona -L deshabilita els comentaris. I la tercera -L deshabilita printar la versió de ldif.</li>
+<li>-b: Utilitzeu la base de cerca com a punt de partida de la cerca en comptes de la predeterminada.</li>
+<li>+: si afegim el + al final ens mostrarà també els atributs funcionals. ***</li>
+</ul>
+<p>Si volem fer un ldapsearch des del nostre host:</p>
+<pre><code>[root@i14 docker]# ldapsearch -x -h 172.16.0.2 -LLL -b &#39;dc=edt,dc=org&#39; dn
+dn: dc=edt,dc=org</code></pre>
+<p>Més exemples:</p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; dn cn
+
+[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; dn *
+
+[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; +</code></pre>
+<h2 id="condicions-de-filtrat-amb-ldapsearch.">Condicions de filtrat amb ldapsearch.</h2>
+<p><em>Filtrar pel common name (cn=Pau Pou)</em>:</p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; &#39;cn=Pau Pou&#39;
+dn: cn=Pau Pou,ou=usuaris,dc=edt,dc=org</code></pre>
+<p><em>Filtrar pel common name i mostrar el dn i la descripció de l'usuari:</em></p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; &#39;cn=Pau Pou&#39; dn description
+dn: cn=Pau Pou,ou=usuaris,dc=edt,dc=org
+description: Watch out for this guy</code></pre>
+<p><em>Mostrar el home phone de tots els users</em></p>
+<pre><code>Tots els home phones: 
+
+[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; dn homePhone
+
+Els que comencin per 555:
+
+[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; dn homePhone &#39;homePhone=555*&#39;</code></pre>
+<p><em>Mostrar el git number de tots els users:</em></p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; dn gidNumber</code></pre>
+<p><em>Buscar els users que tenen el gid 600 i el cognom Pou:</em></p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; &#39;(&amp;(cn=* Pou)(gidNumber=600))&#39;</code></pre>
+<p><em>La mateixa que abans però amb OR i no amb AND:</em></p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; &#39;(|(cn=* Pou)(gidNumber=600))&#39;</code></pre>
+<p><em>Llistar els Pou i els Mas amb gid number 600:</em></p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; &#39;(|(cn=* Pou)(cn=* Mas)(gidNumber=600))&#39; dn</code></pre>
+<p><em>Llistar els gid diferents de 600:</em></p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; &#39;(!(gidNumber=60))&#39; dn gidNumber</code></pre>
+<p><strong>Modificació del base search:</strong></p>
+<ul>
+<li><p><strong>Base</strong>: s'aplica la consulta a una sola entitat, en aquest cas la base.</p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -s base -b &#39;ou=usuaris,dc=edt,dc=org&#39; dn
+dn: ou=usuaris,dc=edt,dc=org</code></pre></li>
+<li><p><strong>One</strong>: mostra el primer sub-nivell.</p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -s one -b &#39;ou=usuaris,dc=edt,dc=org&#39; dn
+
+[root@slapd01 /]# ldapsearch -x -h localhost -LLL -s one -b &#39;dc=edt,dc=org&#39; dn</code></pre></li>
+<li><p><strong>Sub</strong>: és l'opció per defecte i ho llista tot a partir del . :</p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -s sub -b &#39;ou=usuaris,dc=edt,dc=org&#39; dn
+
+[root@slapd01 /]# ldapsearch -x -h localhost -LLL -s sub -b &#39;dc=edt,dc=org&#39; dn</code></pre></li>
+<li><p><strong>Children</strong>: tots els descendents menys la base.</p>
+<pre><code>[root@slapd01 /]# ldapsearch -x -h localhost -LLL -s children -b &#39;ou=usuaris,dc=edt,dc=org&#39; dn</code></pre></li>
+</ul>
+<h2 id="afegir-més-dades-en-calent-client.">Afegir més dades en calent (client).</h2>
+<p><strong>LDAPADD</strong></p>
+<p>ldapmodify obre una connexió a un servidor LDAP, s'uneix i modifica o afegeix entrades. La informació d'entrada es llegeix des de l'entrada estàndard o des del fitxer mitjançant l'ús de l'opció -f.</p>
+<pre><code>[root@slapd01 /]# ldapadd -v -x -h localhost -D &quot;cn=Manager,dc=edt,dc=org&quot; -w secret -f /opt/docker/usuaris_edt.org.ldif 
+
+[root@slapd01 /]# ldapadd -x -h localhost -D &quot;cn=Manager,dc=edt,dc=org&quot; -w secret -f /opt/docker/usuaris_edt.org.ldif 
+adding new entry &quot;ou=usuaris,dc=edt,dc=org&quot;
+ldap_add: Already exists (68)
+
+[root@slapd01 /]# ldapsearch -x -h localhost -LLL -b &#39;dc=edt,dc=org&#39; dn
+dn: dc=edt,dc=org</code></pre>
+<p><em>Afegir un usuari concret:</em></p>
+<p>Ens creem un altre fitxer i hi afegim les dades del Jordi Mas que ahir vam esborrar (està al fitxer usuaris_edt...).</p>
+<p>Ara l'afegirem de nou:</p>
+<pre><code>[root@slapd01 docker]# ldapadd -x -h localhost -D &#39;cn=Manager,dc=edt,dc=org&#39; -w secret -f dada01.ldif
+adding new entry &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot;</code></pre>
+<hr />
+<p>Opcions de ldapadd:</p>
+<ul>
+<li>-v: verbose.</li>
+<li>-x: autenticació simple en comptes de SASL.</li>
+<li>-h: ldaphost. Especifica un host alternatiu en el que s'estigui executant ldap server.</li>
+<li>-D: per especificar el distinguished name en la base de dades.</li>
+<li>-w passwd: seguit de la password de l'usuari amb el que ens autentiquem.</li>
+<li>-W: el prompt ens demanarà la password.</li>
+<li>-f file: llegirà la informació modificada del fitxer en lloc de passar-la per l'entrada estàndar. ***</li>
+</ul>
+<p>Les comandes <strong>ldapXXXXX</strong> són utilitzades pel client per introduïr dades quan estem connectats. Des del servidor, i en mode <strong>offline</strong>, ho hem de fer amb les comandes <strong>slapXXXX</strong>.</p>
+<h2 id="esborrar-dades.">Esborrar dades.</h2>
+<p><strong>LDAPDELETE</strong></p>
+<p><em>Esborrar un usuari:</em></p>
+<pre><code>[root@slapd01 /]# ldapdelete -x -h localhost -D &#39;cn=Manager,dc=edt,dc=org&#39; -W &#39;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&#39;
+Enter LDAP Password: </code></pre>
+<p>Creem un altre fitxer dades02 i hi afegim els dn del Pau i Pere Pou</p>
+<pre><code>[root@slapd01 docker]# ldapdelete -x -h localhost -D &#39;cn=Manager,dc=edt,dc=org&#39; -W -f dades01.ldif
+
+
+cn=Pau Pou,ou=usuaris,dc=edt,dc=org
+cn=Pere Pou,ou=usuaris,dc=edt,dc=org
+
+
+[root@slapd01 docker]# ldapdelete -x -h localhost -D &#39;cn=Manager,dc=edt,dc=org&#39; -W -f   dades01.ldif
+Enter LDAP Password: </code></pre>
+<p>També podem esborrar de cop dos usuaris passant-li per argument el dn de cada un d'aquests usuaris.</p>
+<pre><code>[root@slapd01 docker]# ldapdelete -x -h localhost -D &#39;cn=Manager,dc=edt,dc=org&#39; -W  &quot;cn=Anna Pou,ou=usuaris,dc=edt,dc=org&quot; &quot;cn=Marta Mas,ou=usuaris,dc=edt,dc=org&quot;</code></pre>
+<h2 id="modificar-dades.">Modificar dades.</h2>
+<p><strong>LDAPMODIFY</strong></p>
+<p>El primer pas sería crear-nos un arxiu de modificació:</p>
+<pre><code>[root@slapd01 docker]# vim dada01.ldif </code></pre>
+<p>Si volem introduir totes les dades d'un usuari:</p>
+<pre><code>dn: cn=Jordi Mas,ou=usuaris,dc=edt,dc=org
+changetype: add
+objectclass: posixAccount
+objectclass: inetOrgPerson
+cn: Jordi Mas
+cn: Giorgios Mas
+sn: Mas
+homephone: 555-222-2224
+mail: jordi@edt.org
+description: Watch out for this girl
+ou: Alumnes
+ou: Profes
+uid: jordi
+uidNumber: 5004
+gidNumber: 100
+homeDirectory: /tmp/home/jordi
+userPassword: {SSHA}T5jrMgpJwZZgu0azkLIVoYhiG08/KGUv</code></pre>
+<p>Esborrar un usuari:</p>
+<pre><code>dn: cn=user10,ou=usuaris,dc=edt,dc=org
+changetype: delete</code></pre>
+<ol style="list-style-type: lower-alpha">
+<li><p>Modificar les dades de l'usuari 9 reemplaçant el seu mail per un de nou.</p>
+dn: cn=user09,ou=usuaris,dc=edt,dc=org changetype: modify replace: mail mail: newmail@binladen.155
+<ul>
+<li></li>
+</ul></li>
+<li><p>Esborrar la description de l'user 9.</p>
+<h2 id="delete-description">delete: description</h2></li>
+<li><p>Afegir nous home phones a l'user 9:</p>
+add: homePhone homePhone: 111-111-111 homePhone: 111-111-112
+<ul>
+<li></li>
+</ul></li>
+<li><p>Afegir nous common names a l'user 9:</p>
+<p>add: cn cn: lo puto crac cn: hola user cn: lo usuari de proves</p></li>
+</ol>
+<h2 id="format-dels-fitxers-de-modificació">Format dels fitxers de modificació:</h2>
+<p>Registres d'entrada:</p>
+<p>Els registres d'entrada LDIF s'utilitzen per representar entrades de directori. La forma bàsica d'un registre d'entrada és:</p>
+<pre><code>     dn: &lt;distinguished name&gt;
+        &lt;attrdesc&gt;: &lt;attrvalue&gt;
+        &lt;attrdesc&gt;: &lt;attrvalue&gt;
+        &lt;attrdesc&gt;:: &lt;base64-encoded-value&gt;
+        &lt;attrdesc&gt;:&lt; &lt;URL&gt;
+        ...</code></pre>
+<p>Es pot continuar amb una línia començant la següent línia amb un sol espai o una tabulació:</p>
+<pre><code>     dn: cn=Barbara J Jensen,dc=exam
+             ple,dc=com</code></pre>
+<p>Modificació de registres:</p>
+<p>Els registres de canvi LDIF s'utilitzen per representar les sol·licituds de canvi de directori. Cada registre de canvis comença amb la línia que indica el nom distingit de l'entrada que es modifica:</p>
+<pre><code>        dn: &lt;distinguishedname&gt;
+        changetype: &lt;[modify|add|delete|modrdn]&gt;</code></pre>
+<p>Finalment, es dóna la informació del canvi, el format del qual depèn de quin tipus de canvi s'ha especificat anteriorment. Per obtenir un tipus de canvi de modificació, el format és un o més dels següents:</p>
+<pre><code>        add: &lt;attributetype&gt;
+        &lt;attrdesc&gt;: &lt;value1&gt;
+        &lt;attrdesc&gt;: &lt;value2&gt;
+        ...
+        -
+        </code></pre>
+<p>O, per a una modificació de substitució:</p>
+<pre><code>        replace: &lt;attributetype&gt;
+        &lt;attrdesc&gt;: &lt;value1&gt;
+        &lt;attrdesc&gt;: &lt;value2&gt;
+        ...
+        -</code></pre>
+<p>Si no es donen línies d'atributs per reemplaçar, l'atribut sencer s'ha de suprimir (si és present).</p>
+<p>O bé, per a una modificació de supressió:</p>
+<pre><code>        delete: &lt;attributetype&gt;
+        &lt;attrdesc&gt;: &lt;value1&gt;
+        &lt;attrdesc&gt;: &lt;value2&gt;
+        ...
+        -</code></pre>
+<p>Si no es donen línies d'atributs per suprimir, s'haurà de suprimir tot l'atribut.</p>
+<p>Per a un changetype de tipus add, el format és el següent:</p>
+<pre><code>        &lt;attrdesc1&gt;: &lt;value1&gt;
+        &lt;attrdesc1&gt;: &lt;value2&gt;
+        ...
+        &lt;attrdescN&gt;: &lt;value1&gt;
+        &lt;attrdescN&gt;: &lt;value2&gt;
+        </code></pre>
+<p>Per obtenir un tipus de canvi modrdn o moddn, el format és:</p>
+<pre><code>        newrdn: &lt;newrdn&gt;
+        deleteoldrdn: 0 | 1
+        newsuperior: &lt;DN&gt;
+        </code></pre>
+<p>on un valor de 1 per deleteoldrdn significa eliminar els valors que formen el rdn antic de l'entrada i un valor de 0 significa deixar els valors com a atributs no distingits a l'entrada. La línia newsuperior és opcional i, si està present, especifica el nou superior per moure l'entrada.</p>
+<p>Modificar el dn d'un usuari amb el changetype modrdn</p>
+<pre><code>    vim dades02.ldif
+
+    dn: cn=user09,ou=usuaris,dc=edt,dc=org
+    changetype: modify
+    add: description
+    description: segona descripcio de l&#39;usuari
+    -
+    replace: mail
+    mail: renou@email.cat
+    -
+    delete: homePhone
+
+    dn: cn=user09,ou=usuaris,dc=edt,dc=org
+    changetype: modrdn
+    newrdn: cn=superuser09
+    deleteoldrdn:0 --&gt; si volem mantenir o no l&#39;antic cn. Si el mantenim s&#39;afegirà a l&#39;antic.</code></pre>
+<p>I tot seguit fem un ldapmodify:</p>
+<pre><code>[root@slapd01 docker]# ldapmodify -v -x -h localhost -D &#39;cn=Manager,dc=edt,dc=org&#39; -W -f dades02.ldif</code></pre>
+<p>Més exemples de modificació:</p>
+<pre><code>    vim dades03.ldif
+
+    dn: cn=superuser09,ou=usuaris,dc=edt,dc=org
+    changetype: modify
+    add: mail
+    mail: mail2@edt.org
+    mail: mail3@edt.org
+    mail: mail4@edt.org
+
+    dn: cn=superuser09,ou=usuaris,dc=edt,dc=org
+    changetype: modrdn
+    newrdn: cn=louser09
+    deleteoldrdn:1 --&gt; amb el valor 1 li diem que no mantingui l&#39;anterior cn. 
+
+    dn: cn=louser09,ou=usuaris,dc=edt,dc=org
+    changetype: modify
+    delete: mail
+    mail: mail3@edt.org</code></pre>
+<p>Per a un tipus de canvi de supressió, no es necessita informació addicional al registre.</p>
+<p>Exemple del man:</p>
+<pre><code>        dn: cn=Babs Jensen,dc=example,dc=com
+        changetype: add
+        objectclass: person
+        objectclass: extensibleObject
+        cn: babs
+        cn: babs jensen
+        sn: jensen
+
+        dn: cn=Babs Jensen,dc=example,dc=com
+        changetype: modify
+        add: givenName
+        givenName: Barbara
+        givenName: babs
+        -
+        replace: description
+        description: the fabulous babs
+        -
+        delete: sn
+        sn: jensen
+        -
+
+        dn: cn=Babs Jensen,dc=example,dc=com
+        changetype: modrdn
+        newrdn: cn=Barbara J Jensen
+        deleteoldrdn: 0
+        newsuperior: ou=People,dc=example,dc=com
+
+        dn: cn=Barbara J Jensen,ou=People,dc=example,dc=com
+        changetype: delete
+        </code></pre>
+<h2 id="comparació-de-registres">Comparació de registres:</h2>
+<p><strong>LDAPCOMPARE</strong></p>
+<p>Li estem preguntant si louser09 té un email usr@edt.org. I ens contesta que no.</p>
+<pre><code>[root@slapd01 docker]# ldapcompare -x &quot;cn=louser09,ou=usuaris,dc=edt,dc=org&quot; mail:usr@edt.org
+FALSE</code></pre>
+<hr />
+<pre><code>[root@slapd01 docker]# ldapcompare -x &quot;cn=louser09,ou=usuaris,dc=edt,dc=org&quot; mail:mail2@edt.org
+TRUE
+
+[root@slapd01 docker]# ldapcompare -x &quot;cn=louser09,ou=usuaris,dc=edt,dc=org&quot; &quot;cn:lo puto crac&quot;
+FALSE</code></pre>
+<p><strong>LDAPWHOAMI</strong></p>
+<p>Al docker:</p>
+<pre><code>[root@slapd01 docker]# ldapwhoami -x
+anonymous
+
+[root@i14 docker]# ldapwhoami -x
+anonymous
+    Li acabem de preguntar a ghandi
+
+[root@i14 docker]# ldapwhoami -x -h 172.17.0.2
+anonymous
+    Li acabem de preguntar al docker
+
+[root@slapd01 docker]# ldapwhoami -x -h localhost -W -D &quot;cn=louser09,ou=usuaris,dc=edt,dc=org&quot;
+
+password = jupiter</code></pre>
+<p>Al nostre pc:</p>
+<pre><code>[root@i14 docker]# ldapwhoami -x -h 172.17.0.2 -W -D &quot;cn=louser09,ou=usuaris,dc=edt,dc=org&quot;
+Enter LDAP Password: 
+dn:cn=louser09,ou=usuaris,dc=edt,dc=org
+ password = jupiter</code></pre>
+<p>Al nostre compte d'usuari:</p>
+<pre><code>[isx41536245@i14 ~]$ ldapsearch -x -LLL dn
+
+Amb això acabem de llistar tots els usuaris de gandhi!!!</code></pre>
+<p>El meu compte:</p>
+<pre><code>[isx41536245@i14 ~]$ ldapsearch -x -LLL -b &quot;uid=isx41536245,ou=users,ou=inf,dc=escoladeltreball,dc=org&quot;
+dn: uid=isx41536245,ou=users,ou=inf,dc=escoladeltreball,dc=org
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+objectClass: sambaSamAccount
+cn: isx41536245
+sn: Miquel Ferran Esteva Thomas
+uid: isx41536245
+mail: isx41536245@correu.escoladeltreball.org
+uidNumber: 101080
+gidNumber: 100096
+homeDirectory: /home/users/inf/hisx2/isx41536245
+loginShell: /bin/bash
+gecos: isx41536245
+description: User: isx41536245; Group: hisx2; Domain: inf
+sambaLogonTime: 0
+sambaLogoffTime: 2147483647
+sambaKickoffTime: 2147483647
+sambaSID: S-1-5-21-1935048863-3121341026-513757114-203160
+sambaPrimaryGroupSID: S-1-5-21-1935048863-3121341026-513757114-513
+sambaHomeDrive: P:
+sambaAcctFlags: [U          ]
+displayName: Miquel Ferran Esteva Thomas
+sambaLogonScript: hisx2.BAT
+sambaPwdCanChange: 2147483647
+sambaPwdMustChange: 2147483647
+sambaPwdLastSet: 62701200
+
+[isx41536245@i14 ~]$ getent passwd isx41536245
+isx41536245:*:101080:100096:isx41536245:/home/users/inf/hisx2/isx41536245:/bin/bash</code></pre>
+<p>Això està al ldap de gandhi</p>
+<pre><code>[isx41536245@i14 ~]$ getent group inf
+inf:*:100000:gmartinez,rbruballa,jandugar,jordinas,mramirez,sgarrido,jamoros,jmendez,llriera,mespada,ecanet,msoler,rbotey,acots,apuig,cval,jgimenez,jvinolas,llarraz,emartinez,jsola,vfornes,vmarquina,dtriano,jaranda,lpardodedonlebun,mcastellon,mdomingo,pgarcia,pperis,psadurni,rvillena,cmarin
+[isx41536245@i14 ~]$ getent group hisx2
+hisx2:*:100096:isx26067826,isx39441584,isx41536245,isx41745190,isx45128227,isx47408534,isx47590131,isx48102233,isx48262276,gmartinez,isx434324,rbruballa,jandugar,jordinas,mramirez,sgarrido,jamoros,jmendez,llriera,mespada,ecanet,msoler,rbotey,acots,apuig,cval,jgimenez,jvinolas,llarraz,isx0276204,isx1535386,isx39411579,isx40593849,isx40995578,isx41012376,isx46874983,isx47240077,isx47893266,isx47946514,isx48106078,isx48125075,isx49291320,isx6942595,dtriano,emartinez,jsola,vfornes,vmarquina,jaranda,lpardodedonlebun,mcastellon,mdomingo,pgarcia,pperis,psadurni,rvillena,cmarin</code></pre>
+<p><strong>LDAPPASSWD</strong></p>
+<p>Utilitzarem per modificar la password d'un usuari (sempre i quan tinguem permisos).</p>
+<pre><code>[root@slapd01 docker]# ldappasswd -v -x -D &#39;cn=Manager,dc=edt,dc=org&#39; -W &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&#39;</code></pre>
+<p>Per canviar el password utilitzarem -S. Sense -S li establirá un password aleatori. -s minúscula introduïras tu la password a la línia de comandes.</p>
+<pre><code>[root@slapd01 docker]# ldappasswd -v -x -D &quot;cn=Manager,dc=edt,dc=org&quot; -w secret -S &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot;
+New password: 
+Re-enter new password: 
+ldap_initialize( &lt;DEFAULT&gt; )
+Result: Success (0)</code></pre>
+<p>(li hem posat com a passwd jordi).</p>
+<p>Anem a comprovar que hem canviat la passwd:</p>
+<pre><code>[root@slapd01 docker]# ldapwhoami -x -v -h localhost -D &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot; -W
+ldap_initialize( ldap://localhost )
+Enter LDAP Password: 
+dn:cn=Jordi Mas,ou=usuaris,dc=edt,dc=org
+Result: Success (0)</code></pre>
+<p>Com a manager no ens ha demanat la passwd anterior que tenia Jordi Mas. Ara anem a canviar la passwd com a Jordi Mas</p>
+<pre><code>[root@slapd01 docker]# ldappasswd -v -x -D &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot; -W -s kaka &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot;
+ldap_initialize( &lt;DEFAULT&gt; )
+Enter LDAP Password: 
+Result: Success (0)
+
+[root@slapd01 docker]# ldappasswd -v -x -D &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot; -W -s kaka &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot;</code></pre>
+<p>Amb el -s li indiquem la nova passwd.</p>
+<pre><code>[root@slapd01 docker]# ldapwhoami -x -v -h localhost -D &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot; -W
+ldap_initialize( ldap://localhost )
+Enter LDAP Password: 
+ldap_bind: Invalid credentials (49)
+[root@slapd01 docker]# ldapwhoami -x -v -h localhost -D &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot; -W 
+ldap_initialize( ldap://localhost )
+Enter LDAP Password: 
+dn:cn=Jordi Mas,ou=usuaris,dc=edt,dc=org
+Result: Success (0)
+
+[root@slapd01 docker]# ldappasswd -v -x -D &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot; -W -s jordi
+ldap_initialize( &lt;DEFAULT&gt; )
+Enter LDAP Password: 
+Result: Success (0)</code></pre>
+<p>Provem ara a canviar la passwd d'un altre usuari amb el compte del jordi mas:</p>
+<pre><code>root@slapd01 docker]# ldappasswd -v -x -D &quot;cn=Jordi Mas,ou=usuaris,dc=edt,dc=org&quot; -W -s jordi &quot;cn=user01,ou=usuaris,dc=edt,dc=org&quot;
+ldap_initialize( &lt;DEFAULT&gt; )
+Enter LDAP Password: 
+Result: Insufficient access (50)</code></pre>
+<h2 id="introducció-de-dades-en-calent-server">Introducció de dades en calent (server):</h2>
+<p><strong>SLAPADD</strong></p>
+<p>Slapadd s'utilitza per afegir entrades especificades en el Format d'intercanvi de directoris LDAP (LDIF) a una base de dades slapd (8). Obre la base de dades determinada pel número o sufix de la base de dades i afegeix les entrades corresponents al LDIF proporcionat a la base de dades. Les bases de dades configurades com subordinades d'aquesta també s'actualitzen, tret que s'especifiqui -g. L'entrada LDIF es llegeix des de l'entrada estàndard o el fitxer especificat.</p>
+<pre><code>[root@slapd01 /]# slapadd -v -F /etc/openldap/slapd.d/ -l /opt/docker/usuaris-mes_edt.org.ldif 
+5a2fbcbf bdb_db_open: database &quot;dc=edt,dc=org&quot;: unclean shutdown detected; attempting recovery.
+added: &quot;cn=user01,ou=usuaris,dc=edt,dc=org&quot; (0000000c)
+added: &quot;cn=user02,ou=usuaris,dc=edt,dc=org&quot; (0000000d)
+added: &quot;cn=user03,ou=usuaris,dc=edt,dc=org&quot; (0000000e)
+added: &quot;cn=user04,ou=usuaris,dc=edt,dc=org&quot; (0000000f)
+added: &quot;cn=user05,ou=usuaris,dc=edt,dc=org&quot; (00000010)
+added: &quot;cn=user06,ou=usuaris,dc=edt,dc=org&quot; (00000011)
+added: &quot;cn=user07,ou=usuaris,dc=edt,dc=org&quot; (00000012)
+added: &quot;cn=user08,ou=usuaris,dc=edt,dc=org&quot; (00000013)
+added: &quot;cn=user09,ou=usuaris,dc=edt,dc=org&quot; (00000014)
+added: &quot;cn=user10,ou=usuaris,dc=edt,dc=org&quot; (00000015)
+_#################### 100.00% eta   none elapsed            none fast!
+Closing DB...</code></pre>
+<p><em>Hem de tenir en compte que en afegir dades en calent estem modificant directament la carpeta on es troba la base de dades /etc/openldap/slapd.d). Llavors, si tot seguit intentem engegar no ens deixarà ja que s'han canviat els permisos. Així, haurem de tornar a canviarlos.</em></p>
+<pre><code>[root@slapd01 /]# chown -R ldap.ldap /var/lib/ldap/</code></pre>
+<p>Ara ja sí ens deixa engegar el servei. *** Opcions de slapadd:</p>
+<ul>
+<li>-v: verbose</li>
+<li>-F confdir: especifica el directori de configuració.</li>
+<li>-l ldif-file: llegeix el ldif de l'arxiu especificat en lloc de l'entrada estàndar. ***</li>
+</ul>
+<h2 id="ordres-del-servidor.">Ordres del servidor.</h2>
+<p><strong>SLAPCAT</strong></p>
+<pre><code>[root@slapd01 docker]# slapcat -n0</code></pre>
+<p>Això mostra la base de dades &quot;motor&quot; del servidor ldap. Conté tota la informació per a la correcta &quot;construcció&quot; de les bases de dades. És a dir, conté tota la configuració del dimoni de l'slapd.</p>
+<pre><code>dn: olcDatabase={1}bdb,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcBdbConfig
+olcDatabase: {1}bdb
+olcSuffix: dc=edt,dc=org
+olcAccess: {0}to *  by self write  by * read</code></pre>
+<p>Aquesta sería la bbdd que nosaltres hem creat.</p>
+<pre><code>olcRootDN: cn=Manager,dc=edt,dc=org
+olcRootPW:: c2VjcmV0</code></pre>
+<p>I aquí hem definit qui será el &quot;puto amo&quot;</p>
+<pre><code>olcDbDirectory: /var/lib/ldap</code></pre>
+<p>Directori de configuració.</p>
+<pre><code>olcDbIndex: objectClass pres,eq
+olcDbLinearIndex: FALSE</code></pre>
+<p>Aquí definirem els índex de la bbdd.</p>
+<p><strong>SLAPPASSWD</strong></p>
+<pre><code>[root@slapd01 docker]# slappasswd -h {md5}
+New password: 
+Re-enter new password: 
+{MD5}J6UUjqD73a4i2QK+qaGVMQ==</code></pre>
+<p>Ordre que genera un passwd encriptat segons el format que li indiquem {md5} *** Tipus d'encriptacions:</p>
+<p>-h &quot;scheme&quot; If -h is specified, one of the following RFC 2307 schemes may be specified: {CRYPT}, {MD5}, {SMD5}, {SSHA}, and {SHA}. The default is {SSHA}. Note that scheme names may need to be protected, due to { and }, from expansion by the user's command interpreter.</p>
+<p>{SHA} and {SSHA} use the SHA-1 algorithm (FIPS 160-1), the latter with a seed.</p>
+<p>{MD5} and {SMD5} use the MD5 algorithm (RFC 1321), the latter with a seed.</p>
+<p>{CRYPT} uses the crypt(3).</p>
+<p>{CLEARTEXT} indicates that the new password should be added to userPassword as clear text. Unless {CLEARTEXT} is used, this flag is incompatible with option -g. ***</p>
+<h2 id="configuració-dinàmica-del-servidor">Configuració dinàmica del servidor</h2>
+<pre><code>[root@slapd01 docker]# vim slapd-cn=config-edt.org.conf</code></pre>
+<p>Afegim al fitxer slapd-edt.org-conf les tres línies:</p>
+<pre><code>database config
+rootdn &quot;cn=Sysadmin,cn=config&quot;
+rootpw syskey
+
+[root@slapd01 docker]# rm -rf /etc/openldap/slapd.d/*
+
+[root@slapd01 docker]# slaptest -f slapd-config-edt.org.conf -F /etc/openldap/slapd.d/
+
+[root@slapd01 docker]# chown -R ldap.ldap /var/lib/ldap/
+[root@slapd01 docker]# chown -R ldap.ldap /etc/openldap/slapd.d/
+
+
+[root@slapd01 docker]# ldapsearch -x -h localhost -LLL -D &#39;cn=Sysadmin,cn=config&#39; -w syskey -b &#39;cn=config&#39;</code></pre>
+<hr />
+<h2 id="configuració-múltibles-bases-de-dades.">Configuració múltibles bases de dades.</h2>
+<p>Practicar creant múltiples bbdd amb els fitxers de configuració corresponents.</p>

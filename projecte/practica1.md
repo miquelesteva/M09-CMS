@@ -214,11 +214,6 @@ A executar en un terminal (edita el nom i email de l&rsquo;usuari):
 		  (use "git rm --cached <file>..." to unstage)
 
 			new file:   fitxer
-	
-	També existeix l'opció curta de git status: 
-	
-		git status -s
-		git status --short
 
 3. Afegir els fitxers en el head de git usant **commit**: 
 
@@ -229,82 +224,10 @@ A executar en un terminal (edita el nom i email de l&rsquo;usuari):
 		 create mode 100644 fitxer2
 		 create mode 100644 fitxer3
 
-	Ara els arxius están inclosos en el HEAD però encara no es troben en el nostre repositori remot. 
-
-	Per veure tots els commits "sense finalitzar": 
-
-		git log
+Ara els arxius están inclosos en el HEAD però encara no es troben en el nostre repositori remot. 
 
 4. Enviar els canvis: per enviar aquests canvis al nostre repositori remot ejecutem la següent comanda: 
 
-		git remote add origin https://github.com/miquelesteva/M09-CMS.git
-
-	Un cop haguem executat la comanda anterior no caldrà tornar-la a executar i el que farem serà: 
-		
-		git push -u origin master
-
-5. Passat un temps, si hem fet canvis al nostre repositori o algú vol documents del nostre repo, utilitzarem la següent comanda: 
-
-		git pull origin master
-		
-6. Podem veure les diferències entre el nostre repositori local i remot amb la comanda: 
-
-		git diff HEAD
-		git diff --staged
-		git diff
-		
-7. Desfer els add que estiguin pendents de commit: 
-
-		git reset [directori]/nom_fitxer
-		
-8. Branches: s'utilitzen normalment per fer un backup del codi. Per això es crea una altra "branca" amb la qual es faràn els commits. Aquests commits no afectaràn a les demés branques que hi hagi. 
-
-	Per crear una branca: 
-
-		git branch nom_branca
-		git branch
-		  clean_up
-		* master
-
-	Per canviar de branca: 
-
-		git checkout nom_branca
-
-9. Esborrar fitxers: podem crear una branca amb la única finalitat d'esborrar aquells fitxers que hagin quedat obsolets i ja no volguem mantenir al nostre repositori. Si esborrem amb la idea de mantenir certs fitxers, anem amb compte per tal d'esborrar-los de la branca correcta: 
-		
-		git rm '*.txt'
-	
-	A continuació fem un commit per actualitzar l'estat intermedi: 
-	
-		git commit -m 'Esborra els fitxers que no serveixen per a res'
-		
-	Un cop això tornem a canviar a la branca "mare", en aquest cas la "master": 
-	
-		git checkout master
-		
-	**Preparant el merge**: Ara és quan haurem de "fusionar" els canvis realitzats a la branca "clean_up" a la branca master: 
-	
-		git merge clean_up
-		Updating be3f312..863abd6
-		Fast-forward
-		 dir_prova/hola1.txt | 1 -
-		 dir_prova/hola2.txt | 1 -
-		 hola.txt            | 1 -
-		 hola3.txt           | 1 -
-		 4 files changed, 4 deletions(-)
-		 delete mode 100644 dir_prova/hola1.txt
-		 delete mode 100644 dir_prova/hola2.txt
-		 delete mode 100644 hola.txt
-		 delete mode 100644 hola3.txt
-
-	Si ja no necessitem més la branca creada (en aquest cas creada especialment per a esborrar fitxers innecessaris) la podem esborrar: 
-	
-		git branch -d clean_up
-
-10. Un cop acabada la feina al nostre repositori local será l'hora de pujar els canvis al nostre repositori remot: 
-
-		git push
-		
 
 
 
